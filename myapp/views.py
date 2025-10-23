@@ -514,7 +514,7 @@ def Subadmin_Addstudent_post(request):
     photo=request.FILES['photo']
 
     fs = FileSystemStorage()
-    date = datetime.now().strftime("%Y%m%d%H%M%S") + ".jpg"
+    date = datetime.datetime.now().strftime("%Y%m%d%H%M%S") + ".jpg"
     fs.save(date, photo)
     path = fs.url(date)
 
@@ -997,7 +997,8 @@ def android_forget_password_post(request):
 
 @csrf_exempt
 def student_view_candidates(request):
-    data=Nominees.objects.filter(status='approved')
+    eid=request.POST['eid']
+    data=Nominees.objects.filter(status='approved',ELECTION_id=eid)
     l=[]
     for i in data:
         l.append(
@@ -1041,78 +1042,107 @@ def StudentViewTodayElection(request):
         return JsonResponse({'status': 'no', 'message': 'No elections found for your department'})
 
 
-from django.http import JsonResponse
-from django.core.files.storage import FileSystemStorage
-from .models import Student
-from django.views.decorators.csrf import csrf_exempt
-import face_recognition
+
+
+
 import os
 import datetime
 import cv2
-
+import face_recognition
+from django.conf import settings
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.core.files.storage import FileSystemStorage
+from .models import Student
 
 @csrf_exempt
 def check_face(request):
     try:
-        lid = request.POST['lid']
-        uploaded_file = request.FILES['photo']
+        lid = request.POST.get('lid')
+        eid = request.POST.get('eid')
+        uploaded_file = request.FILES.get('photo')
+        print(uploaded_file, "📸 Uploaded file")
+
+        # Uploaded image from Flutter
+        upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads')
+        os.makedirs(upload_dir, exist_ok=True)
+        fs = FileSystemStorage(location=upload_dir)
+        filename = fs.save(datetime.datetime.now().strftime("%Y%m%d%H%M%S") + ".jpg", uploaded_file)
+        uploaded_path = fs.path(filename)
+        print("📂 Uploaded image saved at:", uploaded_path)
 
         if not lid or not uploaded_file:
-            return JsonResponse({'status': 'no', 'message': 'Missing data'})
+            return JsonResponse({'status': 'no', 'message': 'Missing required data (lid/photo)'})
 
-        print("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+        print(f"🔍 Checking face for LID={lid}, EID={eid}")
 
-        # Get student
-        student = Student.objects.get(AUTH_USER__id=lid)
-        # known_photo_path = os.path.join(settings.MEDIA_ROOT, str(student.Photo))
-        known_photo_path = os.path.join(r'C:\Users\user\PycharmProjects\e_votting\e_votting\media', str(student.Photo))
+        # ✅ Get student
+        try:
+            student = Student.objects.get(AUTH_USER__id=lid)
+            print("✅ Student found:", student)
+        except Student.DoesNotExist:
+            return JsonResponse({'status': 'no', 'message': 'Student not found'})
 
-        print('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+        # ✅ Known photo
+        # Remove leading /media/ if present
+        photo_rel_path = student.Photo
+        if photo_rel_path.startswith("media/") or photo_rel_path.startswith("/media/"):
+            photo_rel_path = photo_rel_path.split("media/", 1)[1]
+
+        # Now join with MEDIA_ROOT
+        known_photo_path = os.path.join(settings.MEDIA_ROOT, photo_rel_path)
+        known_photo_path = os.path.abspath(known_photo_path)
+
+        print("🖼 Known photo path:", known_photo_path, "| Exists:", os.path.exists(known_photo_path))
 
         if not os.path.exists(known_photo_path):
-            return JsonResponse({'status': 'no', 'message': 'Student photo not found'})
+            return JsonResponse({'status': 'no', 'message': 'Student photo not found on server'})
 
-        print('cccccccccccccccccccccccccccccccccccccccccc')
-        print('cccccccccccccccccccccccccccccccccccccccccc')
-
-
-        # Load known face
+        # ✅ Encode known image
         known_img = face_recognition.load_image_file(known_photo_path)
         known_encodings = face_recognition.face_encodings(known_img)
-        if len(known_encodings) == 0:
-            return JsonResponse({'status': 'no', 'message': 'No face in student photo'})
+        print("Known encodings found:", len(known_encodings))
+
+        if not known_encodings:
+            return JsonResponse({'status': 'no', 'message': 'No recognizable face in student photo'})
         known_encoding = known_encodings[0]
 
-        print('dddddddddddddddddddddddddddddddddddddddddddddddd')
-
-        # Save uploaded image permanently
-        fs = FileSystemStorage(location='media/uploads/')
+        # ✅ Save uploaded photo
+        upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads')
+        os.makedirs(upload_dir, exist_ok=True)
+        fs = FileSystemStorage(location=upload_dir)
         filename = fs.save(datetime.datetime.now().strftime("%Y%m%d%H%M%S") + ".jpg", uploaded_file)
-        uploaded_path = fs.path(filename)  # absolute path
+        uploaded_path = fs.path(filename)
+        print("📂 Uploaded image saved at:", uploaded_path)
 
-        # Load uploaded image
+        # ✅ Read uploaded image
         frame = cv2.imread(uploaded_path)
         if frame is None:
             return JsonResponse({'status': 'no', 'message': 'Error reading uploaded image'})
 
-        # Convert BGR to RGB
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-        # Detect face
         unknown_encodings = face_recognition.face_encodings(rgb_frame)
-        if len(unknown_encodings) != 1:
-            return JsonResponse({'status': 'no', 'message': 'Face detection failed or multiple faces'})
+        print("Unknown encodings found:", len(unknown_encodings))
 
-        # Compare faces
-        match = face_recognition.compare_faces([known_encoding], unknown_encodings[0])[0]
+        if not unknown_encodings:
+            return JsonResponse({'status': 'no', 'message': 'No face detected in uploaded image'})
+        if len(unknown_encodings) > 1:
+            return JsonResponse({'status': 'no', 'message': 'Multiple faces detected — please retake photo'})
 
-        if match:
-            return JsonResponse({'status': 'ok', 'message': 'Face matched', 'photo_path': fs.url(filename)})
+        # ✅ Compare faces with tolerance sweep
+        match_strict = face_recognition.compare_faces([known_encoding], unknown_encodings[0], tolerance=0.45)[0]
+        match_normal = face_recognition.compare_faces([known_encoding], unknown_encodings[0], tolerance=0.55)[0]
+        match_loose = face_recognition.compare_faces([known_encoding], unknown_encodings[0], tolerance=0.65)[0]
+
+        print(f"Match results → strict(0.45): {match_strict}, normal(0.55): {match_normal}, loose(0.65): {match_loose}")
+
+        photo_url = request.build_absolute_uri(fs.url(filename))
+
+        if match_normal or match_loose:
+            return JsonResponse({'status': 'ok', 'message': 'Face matched successfully', 'photo_path': photo_url})
         else:
-            return JsonResponse({'status': 'no', 'message': 'Face did not match', 'photo_path': fs.url(filename)})
+            return JsonResponse({'status': 'no', 'message': 'Face did not match', 'photo_path': photo_url})
 
-    except Student.DoesNotExist:
-        return JsonResponse({'status': 'no', 'message': 'Student not found'})
     except Exception as e:
-        print("Error in face check:", e)
-        return JsonResponse({'status': 'no', 'message': str(e)})
+        print("❌ Error in check_face:", str(e))
+        return JsonResponse({'status': 'no', 'message': f'Error: {e}'})
