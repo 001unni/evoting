@@ -1,0 +1,33 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract StudentRecords {
+    struct Student {
+        string nomineeid;
+        string voterid;
+        string electionid;
+        string date;
+        string time;
+
+    }
+    mapping(uint256 => Student) private students;
+    uint256[] private studentIds; // Track IDs
+    // Add student and track ID
+
+    uint256 private index_student=0;
+
+    function addvoting( string memory nomineeid, string memory voterid,string memory electionid,string memory date, string memory time) public {
+        index_student=index_student+1;
+        studentIds.push(index_student);
+        students[index_student] = Student(nomineeid, voterid,electionid,date,time);
+    }
+    // Get single student
+    function getvoting(uint256 id) public view returns (string memory, string memory,string memory,string memory,string memory) {
+        Student memory student = students[id];
+        return (student.nomineeid, student.voterid,student.electionid,student.date,student.time);
+    }
+    // Get all student IDs
+    function getAllStudentIds() public view returns (uint256[] memory) {
+        return studentIds;
+    }
+}

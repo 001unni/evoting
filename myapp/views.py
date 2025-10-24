@@ -224,7 +224,7 @@ def admin_Addsubadmin_post(request):
     # password=random.randint(0000,9999)
 
     fs=FileSystemStorage()
-    date=datetime.now().strftime("%Y%m%d%H%M%S")+".jpg"
+    date=datetime.datetime.now().strftime("%Y%m%d%H%M%S")+".jpg"
     fs.save(date,photo)
     path=fs.url(date)
 
@@ -290,7 +290,7 @@ def admin_Editsubadmin_post(request):
     if 'photo' in request.FILES:
         photo = request.FILES['photo']
         fs = FileSystemStorage()
-        date = datetime.now().strftime("%Y%m%d%H%M%S") + ".jpg"
+        date = datetime.datetime.now().strftime("%Y%m%d%H%M%S") + ".jpg"
         fs.save(date, photo)
         path = fs.url(date)
         sobj.Photo = path
@@ -468,10 +468,12 @@ def admin_sentreply_get(request,id):
 def admin_sentreply_post(request):
     reply = request.POST['reply']
     id = request.POST['id']
+
     data=Complaint.objects.get(id=id)
-    data.reply_text=reply
+    data.reply=reply
+    data.status='replied'
     data.save()
-    return redirect('/myapp/admin_view_complaint_get/')
+    return redirect('/myapp/admin_view_complaint_get/#abc')
 
 
 # user=User.objects.get(username='admin@gmail.com')
@@ -583,7 +585,7 @@ def Subadmin_Editstudent_post(request):
     if 'photo' in request.FILES:
         photo = request.FILES['photo']
         fs = FileSystemStorage()
-        date = datetime.now().strftime("%Y%m%d%H%M%S") + ".jpg"
+        date = datetime.datetime.now().strftime("%Y%m%d%H%M%S") + ".jpg"
         fs.save(date, photo)
         path = fs.url(date)
         sobj.Photo=path
@@ -626,11 +628,11 @@ def Subadmin_Addstaff_post(request):
     Id_proof=request.FILES['Id Proof']
 
     fs = FileSystemStorage()
-    date = datetime.now().strftime("%Y%m%d%H%M%S") + ".jpg"
+    date = datetime.datetime.now().strftime("%Y%m%d%H%M%S") + ".jpg"
     fs.save(date, photo)
     path = fs.url(date)
 
-    date1 = datetime.now().strftime("%Y%m%d%H%M%S") + ".jpg"
+    date1 = datetime.datetime.now().strftime("%Y%m%d%H%M%S") + ".jpg"
     fs.save(date1, Id_proof)
     path1 = fs.url(date1)
 
@@ -675,7 +677,7 @@ def Subadmin_Editstaff_post(request):
     if 'photo' in request.FILES:
         photo = request.FILES['photo']
         fs = FileSystemStorage()
-        date = datetime.now().strftime("%Y%m%d%H%M%S") + ".jpg"
+        date = datetime.datetime.now().strftime("%Y%m%d%H%M%S") + ".jpg"
         fs.save(date, photo)
         path = fs.url(date)
         sobj.Photo=path
@@ -684,7 +686,7 @@ def Subadmin_Editstaff_post(request):
     if 'idproof' in request.FILES:
         Id_proof = request.FILES['Id Proof']
         fs1 = FileSystemStorage()
-        date1 = datetime.now().strftime("%Y%m%d%H%M%S") + ".jpg"
+        date1 = datetime.datetime.now().strftime("%Y%m%d%H%M%S") + ".jpg"
         fs1.save(date1, Id_proof)
         path1 = fs1.url(date1)
         sobj.idproof=path1
@@ -732,14 +734,92 @@ def Subadmin_ViewElection(request):
     res = Election.objects.all()
     return render(request,'Subadmin/View Election.html',{'data':res})
 
+
+def subadmin_viewelectionresultbyelectionid(request, electionid):
+
+    nom = Nominees.objects.filter(ELECTION_id=electionid)
+
+    li = []
+
+    for i in nom:
+        ids = contract.functions.getAllStudentIds().call()
+
+        cnt = 0
+        for id in ids:
+            nomineeid, voterid, electionids, date, time = contract.functions.getvoting(id).call()
+
+            if nomineeid == str(i.id) and electionid == electionids:
+                cnt += 1
+
+        li.append({
+            'name': i.STUDENT.name,
+            'photo': i.STUDENT.Photo,
+            'department': i.STUDENT.DEPARTMENT.department,
+            'email': i.STUDENT.Email,
+            'phone': i.STUDENT.Phonenumber,
+            'election': i.ELECTION.ElectionName,
+            'date': i.ELECTION.ElectionDate,
+            'votes': cnt,
+        })
+    li = sorted(li, key=lambda x: x['votes'], reverse=True)
+
+    return render(request, 'Subadmin/view result.html', {'data': li})
+
+
+# def subadmin_viewelectionresultbyelectionid(request,electionid):
+#
+#
+#     nom=Nominees.objects.filter(ELECTION_id=electionid)
+#
+#     cnt=0
+#
+#     noms=[]
+#     total=[]
+#     for i in nom:
+#
+#         ids = contract.functions.getAllStudentIds().call()
+#         for id in ids:
+#             nomineeid, voterid, electionids, date, time = contract.functions.getvoting(id).call()
+#
+#             if nomineeid == str(i.id) and electionid == electionids:
+#
+#                 cnt=cnt+1
+#
+#
+#         total.append(cnt)
+#         noms.append(i)
+#         cnt=0
+#
+#     li=[]
+#     for i in range(0,len(noms)):
+#
+#
+#         li.append(
+#
+#             {
+#                 'name': noms[i].STUDENT.name,
+#                 'Photo': noms[i].STUDENT.Photo,
+#                 'votes': total[i],
+#             }
+#         )
+#
+#
+#     return  JsonResponse(
+#         {
+#             'status':'ok',
+#             'data':li
+#         }
+#     )
+
+
 @login_required(login_url='/myapp/login_get/')  
 def Subadmin_viewnominees(request):
     res = Nominees.objects.all()
     return render(request,'Subadmin/view nominees.html',{'data':res})
 
-@login_required(login_url='/myapp/login_get/')  
-def Subadmin_viewresult(request):
-    return render(request,'Subadmin/view Result.html')
+# @login_required(login_url='/myapp/login_get/')
+# def Subadmin_viewresult(request):
+#     return render(request,'Subadmin/view Result.html')
 
 
 #-------------------------------- C O O R D I N A T O R-------------------------------------------
@@ -759,6 +839,21 @@ def coordinator_view_ElectionStatus(request):
     data=Election.objects.all()
     return render(request,"coordinator/View Election Status.html",{"data":data})
 
+@login_required(login_url='/myapp/login_get/')
+def coordinator_update_ElectionStatus(request,id):
+
+    data=Election.objects.get(id=id)
+    if data.Status == 'pending':
+        data.Status='nomination over'
+    elif data.Status == 'nomination over':
+        data.Status = 'finished'
+    data.save()
+    # Election.objects.filter(id=id).update(status='finished')
+    return redirect('/myapp/coordinator_view_ElectionStatus/#abc')
+
+
+
+
 @login_required(login_url='/myapp/login_get/')  
 def coordinator_view_VerifyNominee(request,id):
     data = Nominees.objects.filter(ELECTION_id=id)
@@ -767,12 +862,12 @@ def coordinator_view_VerifyNominee(request,id):
 @login_required(login_url='/myapp/login_get/')
 def coordinator_approve_nominie(request,id):
     Nominees.objects.filter(id=id).update(status='approved')
-    return redirect('/myapp/coordinator_view_VerifyNominee/')
+    return redirect('/myapp/coordinator_view_approved_Nominee/#abc')
 
 @login_required(login_url='/myapp/login_get/')
-def coordinator_reject_nominie(request,id):
+def coordinator_view_rejected_Nominee(request,id):
     Nominees.objects.filter(id=id).update(status='rejected')
-    return redirect('/myapp/coordinator_view_VerifyNominee/')
+    return redirect('/myapp/coordinator_view_VerifyNominee/#abc')
 
 
 @login_required(login_url='/myapp/login_get/')
@@ -781,13 +876,93 @@ def coordinator_view_approved_Nominee(request):
     return render(request, "coordinator/approved nomine.html", {"data": data})
 
 @login_required(login_url='/myapp/login_get/')
-def coordinator_view_rejected_Nominee(request):
+def coordinator_reject_nominie(request):
     data = Nominees.objects.filter(status='rejected')
     return render(request, "coordinator/rejected nomine.html", {"data": data})
 
-@login_required(login_url='/myapp/login_get/')  
-def coordinator_view_Result(request):
-    return render(request, "coordinator/view result.html")
+@login_required(login_url='/myapp/login_get/')
+def coordinator_delete_election(request,id):
+    Election.objects.get(id=id).delete()
+    return redirect('/myapp/coordinator_update_ElectionStatus/#abc')
+
+
+
+
+def coordinator_viewelectionresultbyelectionid(request, electionid):
+
+    nom = Nominees.objects.filter(ELECTION_id=electionid)
+
+    data = []
+
+    ids = contract.functions.getAllStudentIds().call()
+
+    for i in nom:
+        cnt = 0
+        for id in ids:
+            nomineeid, voterid, electionids, date, time = contract.functions.getvoting(id).call()
+            if nomineeid == str(i.id) and electionid == electionids:
+                cnt += 1
+
+        data.append({
+            'name': i.STUDENT.name,
+            'photo': i.STUDENT.Photo,
+            'department': i.STUDENT.DEPARTMENT.department,
+            'email': i.STUDENT.Email,
+            'phone': i.STUDENT.Phonenumber,
+            'election': i.ELECTION.ElectionName,
+            'date': i.ELECTION.ElectionDate,
+            'votes': cnt,
+        })
+
+    data = sorted(data, key=lambda x: x['votes'], reverse=True)
+
+    return render(request, 'Coordinator/view result.html', {'data': data})
+
+
+# def coordinator_viewelectionresultbyelectionid(request,electionid):
+#
+#
+#     nom=Nominees.objects.filter(ELECTION_id=electionid)
+#
+#     cnt=0
+#
+#     noms=[]
+#     total=[]
+#     for i in nom:
+#
+#         ids = contract.functions.getAllStudentIds().call()
+#         for id in ids:
+#             nomineeid, voterid, electionids, date, time = contract.functions.getvoting(id).call()
+#
+#             if nomineeid == str(i.id) and electionid == electionids:
+#
+#                 cnt=cnt+1
+#
+#
+#         total.append(cnt)
+#         noms.append(i)
+#         cnt=0
+#
+#     li=[]
+#     for i in range(0,len(noms)):
+#
+#
+#         li.append(
+#
+#             {
+#                 'name': noms[i].STUDENT.name,
+#                 'Photo': noms[i].STUDENT.Photo,
+#                 'votes': total[i],
+#             }
+#         )
+#
+#
+#     return  JsonResponse(
+#         {
+#             'status':'ok',
+#             'data':li
+#         }
+#     )
 
 
 @login_required(login_url='/myapp/login_get/')  
@@ -807,6 +982,9 @@ def Coordinator_changepassword_post(request):
             return redirect('/myapp/login_get/')
         else:
             return redirect('/myapp/coordinator_changepassword/')
+
+
+
 
 ################################### STUDENT ###############################
 @csrf_exempt
@@ -866,7 +1044,7 @@ def StudentViewElection(request):
     student = Student.objects.get(AUTH_USER_id=lid)
     department_id = student.DEPARTMENT.id
 
-    elections = Election.objects.filter(Department_id=department_id)
+    elections = Election.objects.filter(Department_id=department_id,Status='pending')
     data = []
 
     for election in elections:
@@ -882,6 +1060,30 @@ def StudentViewElection(request):
         return JsonResponse({'status': 'ok', 'data': data})
     else:
         return JsonResponse({'status': 'no', 'message': 'No elections found for your department'})
+
+@csrf_exempt
+def StudentViewPastElection(request):
+
+    lid = request.POST['lid']
+    student = Student.objects.get(AUTH_USER_id=lid)
+    department_id = student.DEPARTMENT.id
+
+    elections = Election.objects.filter(Department_id=department_id)
+    data = []
+
+    for election in elections:
+        data.append({
+            'eid': election.id,
+            'ElectionName': election.ElectionName,
+            'ElectionDate': str(election.ElectionDate),
+            'Department': election.Department.department,
+            'Status': election.Status,
+        })
+
+    if data:
+        return JsonResponse({'status': 'ok', 'data': data})
+    else:
+        return JsonResponse({'status': 'no', 'message': 'No elections found for your department or Nomination over'})
 
 @csrf_exempt
 def student_send_nomination(request):
@@ -924,7 +1126,7 @@ def student_send_complaint(request):
     a.complaint_text = complaint
     a.status = 'pending'
     a.reply = 'pending'
-    a.date=datetime.now().today()
+    a.date=datetime.datetime.now().today()
     a.STUDENT = Student.objects.get(AUTH_USER_id=lid)
     a.save()
 
@@ -1146,3 +1348,120 @@ def check_face(request):
     except Exception as e:
         print("❌ Error in check_face:", str(e))
         return JsonResponse({'status': 'no', 'message': f'Error: {e}'})
+
+
+
+from .blockchain import contract, w3
+@csrf_exempt
+def checkalreadyvoted(nomid, sid,electionid):
+    status=False
+    ids = contract.functions.getAllStudentIds().call()
+    for id in ids:
+        nomineeid, voterid, electionids, date, time = contract.functions.getvoting(id).call()
+
+        if nomineeid == nomid and electionid== electionids and voterid==sid:
+            status=True
+            break
+
+    return  status
+
+
+
+
+@csrf_exempt
+def student_add_voting(request):
+    sid= request.POST["lid"]
+    nomid= request.POST["candidate_id"]
+    electionid= request.POST["electionid"]
+
+    st=checkalreadyvoted(nomid,sid,electionid)
+    if st== True:
+
+        return JsonResponse(
+            {
+                'status': 'Already voted'
+            }
+        )
+    else:
+
+        dates= datetime.datetime.now().strftime("%Y-%m-%d")
+        times= datetime.datetime.now().strftime("%H:%M:%S")
+
+        try:
+            tx_hash = contract.functions.addvoting(nomid, sid,electionid,dates,times).transact()
+            w3.eth.wait_for_transaction_receipt(tx_hash)
+
+        except Exception as e:
+            message = "Error: " + str(e)
+
+
+        return  JsonResponse(
+            {
+                'status':'ok'
+            }
+        )
+
+@csrf_exempt
+def viewelectionresultbyelectionid(request):
+    electionid= request.POST["eid"]
+
+    nom=Nominees.objects.filter(ELECTION_id=electionid)
+
+    cnt=0
+
+    noms=[]
+    total=[]
+    for i in nom:
+
+        ids = contract.functions.getAllStudentIds().call()
+        for id in ids:
+            nomineeid, voterid, electionids, date, time = contract.functions.getvoting(id).call()
+
+            if nomineeid == str(i.id) and electionid == electionids:
+
+                cnt=cnt+1
+
+
+        total.append(cnt)
+        noms.append(i)
+        cnt=0
+
+    li=[]
+    for i in range(0,len(noms)):
+
+
+        li.append(
+
+            {
+                'name': noms[i].STUDENT.name,
+                'Photo': noms[i].STUDENT.Photo,
+                'votes': total[i],
+            }
+        )
+    li = sorted(li, key=lambda x: x['votes'], reverse=True)
+
+    return  JsonResponse(
+        {
+            'status':'ok',
+            'data':li
+        }
+    )
+
+
+@csrf_exempt
+def user_change_password(request):
+    currentpassword = request.POST['currentpassword']
+    newpassword = request.POST['newpassword']
+    confirmpassword = request.POST['confirmpassword']
+    lid=request.POST['lid']
+    user=User.objects.get(id=lid)
+    if user.check_password(currentpassword):
+        if newpassword == confirmpassword:
+            user.set_password(newpassword)
+            user.save()
+            return JsonResponse({'status': 'ok'})
+        else:
+            return JsonResponse({'status': 'no'})
+    else:
+        return JsonResponse({'status': 'no'})
+
